@@ -15,7 +15,6 @@
 		"lint": "prettier --check . && eslint .",
 		"test:unit": "vitest",
 		"test": "npm run test:unit -- --run",
-		"preinstall": "npx only-allow bun",
 		"clean": "rimraf .svelte-kit build"
 	},
 	"devDependencies": {

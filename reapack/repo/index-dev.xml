@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<index version="1" name="Reaper Setlist (Custom Fork)">
+  <category name="Scripts">
+    <reapack name="Reaper Setlist Custom" type="webinterface" desc="Reaper Setlist with Export Recordings Feature">
+      <version name="2.1.0-custom" author="stefan-tradingbot" time="2025-11-06T12:00:00Z">
+        <source type="script" file="reaper-setlist.lua" main="main">https://raw.githubusercontent.com/stefan-tradingbot/Reaper-Setlist/main/reapack/repo/reaper-setlist/files/reaper-setlist.lua</source>
+        <source type="webinterface" file="setlist.html" main="main">https://raw.githubusercontent.com/stefan-tradingbot/Reaper-Setlist/main/reapack/repo/reaper-setlist/files/setlist.html</source>
+        <changelog><![CDATA[## [2.1.0-custom] (2025-11-06)
+
+### Features
+* Add "Export Recordings" button on Setup page
+* Integrated stem export functionality from stem_export_chatgpt.lua
+
+### Changes
+* Added new RPC operation: exportRecordings
+* Created export_recordings.lua operation
+* Modified setup page UI to include Export Recordings section]]></changelog>
+      </version>
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl {\f0\fnil\fcharset0 Calibri;}}
+{\pard REAPER Setlist (Custom Fork)\sb70\par}
+{\pard A setlist management tool for REAPER with added export recordings functionality.\sb70\par}
+{\pard Features\sb70\par}
+{\pard - Web-based setlist management interface\sb70\par}
+{\pard - Live performance mode\sb70\par}
+{\pard - Song and set organization\sb70\par}
+{\pard - Export Recordings button for stem export\sb70\par}
+{\pard - Real-time transport integration\sb70\par}}]]></description>
+        <link rel="website" href="https://github.com/stefan-tradingbot/Reaper-Setlist">GitHub Repository</link>
+      </metadata>
+    </reapack>
+  </category>
+</index>
