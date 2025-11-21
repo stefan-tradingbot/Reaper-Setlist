@@ -11,7 +11,7 @@ local function BrowseFolder(initial_path)
             path = handle:read("*a")
             handle:close()
         end
-    else
+    elseif os_name:find("OSX") or os_name:find("macOS") then
         -- macOS: Use AppleScript via osascript
         -- 'choose folder' is the standard way.
         -- We wrap it in 'try' to handle cancellation (which throws an error) gracefully.
@@ -26,6 +26,24 @@ local function BrowseFolder(initial_path)
         if handle then
             path = handle:read("*a")
             handle:close()
+        end
+    else
+        -- Linux: Try zenity first, then kdialog
+        -- zenity is common on GNOME/GTK based systems
+        local handle = io.popen('zenity --file-selection --directory --title="Select Export Folder" 2>/dev/null')
+        if handle then
+            path = handle:read("*a")
+            handle:close()
+        end
+
+        -- If zenity failed or returned empty (and exit code was failure, though io.popen doesn't give exit code easily),
+        -- check if path is empty. If empty, try kdialog (KDE).
+        if not path or path == "" then
+             local handle_k = io.popen('kdialog --getexistingdirectory 2>/dev/null')
+             if handle_k then
+                 path = handle_k:read("*a")
+                 handle_k:close()
+             end
         end
     end
 

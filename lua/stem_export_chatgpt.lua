@@ -6,6 +6,10 @@
 ---------------------------------
 local EXPORT_BASE_PATH = "/Users/mgeigerhilk/Documents/set_export"
 
+-- Nur diese Spuren werden nach Export geleert:
+local TRACKS_TO_CLEAR = {
+    "E-Drums", "Git S", "Git P", "Vox S", "Vox P", "Vox E"
+}
 
 
 ---------------------------------
