@@ -369,13 +369,14 @@ local function export_tracks_in_project(proj, export_root, track_names, project_
     reaper.Main_OnCommand(41824, 0)
 
     ---------------------------------
-    -- Exportierte Spuren nach Export leeren
+    -- Hardcoded tracks nach Export leeren
     ---------------------------------
     reaper.Undo_BeginBlock()
     for i = 0, num_tracks - 1 do
         local track = reaper.GetTrack(proj, i)
         local _, name = reaper.GetTrackName(track, "")
-        for _, clear_name in ipairs(track_names) do
+        -- Nur diese Spuren werden nach Export geleert:
+        for _, clear_name in ipairs(TRACKS_TO_CLEAR) do
             if name == clear_name then
                 local item_count = reaper.CountTrackMediaItems(track)
                 for j = item_count - 1, 0, -1 do
@@ -387,7 +388,7 @@ local function export_tracks_in_project(proj, export_root, track_names, project_
             end
         end
     end
-    reaper.Undo_EndBlock("Lösche Audio-Items auf exportierten Spuren", -1)
+    reaper.Undo_EndBlock("Lösche Audio-Items auf festgelegten Spuren", -1)
 
     -- Aufräumen
     reaper.GetSet_LoopTimeRange2(proj, true, false, 0.0, 0.0, false)
