@@ -2,7 +2,8 @@ export const ScriptOperationKey = 'Operation';
 
 export const StateKeys = {
 	ProjectRoot: 'ProjectRoot',
-	ScriptActionId: 'ScriptActionId'
+	ScriptActionId: 'ScriptActionId',
+	ExportPath: 'ExportPath'
 } as const;
 
 export type StateKey = (typeof StateKeys)[keyof typeof StateKeys] | typeof ScriptOperationKey;

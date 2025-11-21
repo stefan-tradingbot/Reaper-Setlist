@@ -118,6 +118,9 @@ export class TypeScriptTarget extends Target {
 		for (const { name, type } of inputs) {
 			if (type.getText() === 'Chunkable<T>') {
 				operationLines.push(`\t\t...this.getChunkCommands("${name}", ${name}),`);
+			} else if (type.isArray() || type.isClassOrInterface()) {
+				// JSON.stringify arrays and objects
+				operationLines.push(`\t\tnew SetStateCommand(SectionKeys.ReaperSetlist, "${name}", JSON.stringify(${name})),`);
 			} else {
 				operationLines.push(`\t\tnew SetStateCommand(SectionKeys.ReaperSetlist, "${name}", ${name}),`);
 			}
@@ -149,23 +152,34 @@ export class TypeScriptTarget extends Target {
 			operationLines.push(`\t\tthrow new Error("Failed to retrieve ${output.name}. Please check the script configuration.");`);
 			operationLines.push(`\t}`);
 
+			const isConflict = inputs.some(input => input.name === output.name);
+			const varName = isConflict ? `${output.name}Val` : output.name;
+
 			if (output.type.isArray() || output.type.isClassOrInterface()) {
-				operationLines.push(`\tconst ${output.name} = JSON.parse(${output.name}Raw) as ${output.type.getText()}; `);
+				operationLines.push(`\tconst ${varName} = JSON.parse(${output.name}Raw) as ${output.type.getText()}; `);
 			} else if (output.type.isString()) {
-				operationLines.push(`\tconst ${output.name} = ${output.name}Raw; `);
+				operationLines.push(`\tconst ${varName} = ${output.name}Raw; `);
 			} else if (output.type.isNumber()) {
-				operationLines.push(`\tconst ${output.name} = parseFloat(${output.name}Raw); `);
+				operationLines.push(`\tconst ${varName} = parseFloat(${output.name}Raw); `);
 			} else if (output.type.isBoolean()) {
-				operationLines.push(`\tconst ${output.name} = ${output.name}Raw === 'true'; `);
+				operationLines.push(`\tconst ${varName} = ${output.name}Raw === 'true'; `);
 			} else {
 				throw new Error(`Unsupported output type: ${output.type.getText()}`);
 			}
 		}
 
 		if (outputs.length === 1) {
-			operationLines.push(`\treturn ${outputs[0]!.name}; `);
+			const output = outputs[0]!;
+			const isConflict = inputs.some(input => input.name === output.name);
+			const varName = isConflict ? `${output.name}Val` : output.name;
+			operationLines.push(`\treturn ${varName}; `);
 		} else if (outputs.length > 1) {
-			operationLines.push(`\treturn { ${outputs.map((o) => o.name).join(', ')} }; `);
+			const returnProps = outputs.map(o => {
+				const isConflict = inputs.some(input => input.name === o.name);
+				const varName = isConflict ? `${o.name}Val` : o.name;
+				return isConflict ? `${o.name}: ${varName}` : o.name;
+			}).join(', ');
+			operationLines.push(`\treturn { ${returnProps} }; `);
 		}
 		operationLines.push(`} `);
 		return operationLines.map(x => `\t${x} `);

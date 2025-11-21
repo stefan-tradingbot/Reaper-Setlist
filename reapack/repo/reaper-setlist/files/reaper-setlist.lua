@@ -134,6 +134,8 @@ local GetProjectLength = require("operations/get_project_length")
 local GetOpenTabs = require("operations/get_open_tabs")
 local WriteChunkedData = require("operations/write_chunked_data")
 local DeleteState = require("operations/delete_state")
+local GetTrackNames = require("operations/get_track_names")
+local BrowseFolder = require("operations/browse_folder")
 local ExportRecordings = require("operations/export_recordings")
 
 ---@class ReaperTab
@@ -276,137 +278,231 @@ local Operations = {
 		reaper.DeleteExtState(Globals.SECTION, "key", true)
 	end),
 
-	["exportRecordings"] = safe_operation(function()
-		ExportRecordings()
+	["getTrackNames"] = safe_operation(function()
+		local trackNames = GetTrackNames()
 
+		if trackNames == nil or trackNames == '' then
+			error("Operation getTrackNames failed to return required output: trackNames")
+		end
+
+		reaper.SetExtState(Globals.SECTION, "trackNames", json.encode(trackNames), false)
+	end),
+
+	["browseFolder"] = safe_operation(function()
+		local initialPath = reaper.GetExtState(Globals.SECTION, "initialPath")
+		if initialPath == nil or initialPath == "" then
+			error("Missing required parameter: initialPath")
+		end
+
+		local path = BrowseFolder(initialPath)
+
+		if path == nil or path == '' then
+			error("Operation browseFolder failed to return required output: path")
+		end
+
+		reaper.SetExtState(Globals.SECTION, "path", path, false)
+		reaper.DeleteExtState(Globals.SECTION, "initialPath", true)
+	end),
+
+	["exportRecordings"] = safe_operation(function()
+		local trackNames = reaper.GetExtState(Globals.SECTION, "trackNames")
+		if trackNames == nil or trackNames == "" then
+			error("Missing required parameter: trackNames")
+		end
+		trackNames = json.decode(trackNames)
+
+		local exportPath = reaper.GetExtState(Globals.SECTION, "exportPath")
+		if exportPath == nil or exportPath == "" then
+			error("Missing required parameter: exportPath")
+		end
+
+		ExportRecordings(trackNames, exportPath)
+
+		reaper.DeleteExtState(Globals.SECTION, "trackNames", true)
+		reaper.DeleteExtState(Globals.SECTION, "exportPath", true)
 	end),
 }
 
 return Operations
 end)
 __bundle_register("operations/export_recordings", function(require, _LOADED, __bundle_register, __bundle_modules)
----comment Export recordings using stem export functionality
-local function ExportRecordings()
-    ---------------------------------
-    -- EINSTELLUNGEN
-    ---------------------------------
-    local EXPORT_BASE_PATH = "/home/verwalter/Dokumente/set_export"
-    local TRACK_NAMES = {
-        "Bass", "Sample", "Backing Vox", "E-Drums",
-        "Git S", "Git P", "Vox S", "Vox P", "Vox E"
-    }
+local function msg(s)
+    reaper.ShowConsoleMsg(tostring(s) .. "\n")
+end
 
-    ---------------------------------
-    -- HILFSFUNKTIONEN
-    ---------------------------------
-    local function os_date_string()
-        return os.date("%Y-%m-%d_%H-%M-%S")
+local function ensure_directory(path)
+    reaper.RecursiveCreateDirectory(path, 0)
+end
+
+local function os_date_string()
+    return os.date("%Y-%m-%d_%H-%M-%S")
+end
+
+local function get_end_marker_pos(proj)
+    local count = reaper.CountProjectMarkers(proj)
+    local end_pos = reaper.GetProjectLength(proj)
+    for i = 0, count - 1 do
+        local retval, isrgn, pos, _, name = reaper.EnumProjectMarkers(i)
+        if retval and not isrgn and name:upper():find("END") then
+            end_pos = pos
+            break
+        end
     end
+    return end_pos
+end
 
-    local function ensure_directory(path)
-        reaper.RecursiveCreateDirectory(path, 0)
-    end
-
-    local function msg(s)
-        reaper.ShowConsoleMsg(tostring(s) .. "\n")
-    end
-
-    local function get_end_marker_pos(proj)
-        local count = reaper.CountProjectMarkers(proj)
-        local end_pos = reaper.GetProjectLength(proj)
-        for i = 0, count - 1 do
-            local retval, isrgn, pos, _, name = reaper.EnumProjectMarkers(i)
-            if retval and not isrgn and name:upper():find("END") then
-                end_pos = pos
-                break
+local function export_tracks_in_project(proj, export_root, track_names)
+    local _, _ = reaper.EnumProjects(-1, "")
+    local proj_name = reaper.GetProjectName(proj, "")
+    proj_name = proj_name:gsub("%.rpp", "")
+    local export_path = export_root .. "/" .. proj_name
+    ensure_directory(export_path)
+    msg("Exportiere Projekt: " .. proj_name)
+    reaper.Main_OnCommand(40297, 0)
+    local num_tracks = reaper.CountTracks(proj)
+    local selected = 0
+    for i = 0, num_tracks - 1 do
+        local track = reaper.GetTrack(proj, i)
+        local _, name = reaper.GetTrackName(track, "")
+        for _, wanted_name in ipairs(track_names) do
+            if name == wanted_name then
+                reaper.SetTrackSelected(track, true)
+                selected = selected + 1
             end
         end
-        return end_pos
     end
-
-    ---------------------------------
-    -- EXPORT-FUNKTION
-    ---------------------------------
-    local function export_tracks_in_project(proj, export_root)
-        local _, _ = reaper.EnumProjects(-1, "")
-        local proj_name = reaper.GetProjectName(proj, "")
-        proj_name = proj_name:gsub("%.rpp", "")
-        local export_path = export_root .. "/" .. proj_name
-        ensure_directory(export_path)
-
-        msg("Exportiere Projekt: " .. proj_name)
-
-        -- Spuren selektieren
-        reaper.Main_OnCommand(40297, 0)
-        local num_tracks = reaper.CountTracks(proj)
-        local selected = 0
-        for i = 0, num_tracks - 1 do
-            local track = reaper.GetTrack(proj, i)
-            local _, name = reaper.GetTrackName(track, "")
-            for _, wanted_name in ipairs(TRACK_NAMES) do
-                if name == wanted_name then
-                    reaper.SetTrackSelected(track, true)
-                    selected = selected + 1
-                end
-            end
-        end
-
-        if selected == 0 then
-            msg("⚠️ Keine passenden Spuren gefunden in " .. proj_name)
-            return
-        end
-
-        ---------------------------------
-        -- FIX: Time-Selection auf Projektbereich setzen
-        ---------------------------------
-        local end_pos = get_end_marker_pos(proj)
-        reaper.GetSet_LoopTimeRange2(proj, true, false, 0.0, end_pos, false)
-
-        ---------------------------------
-        -- Render Einstellungen
-        ---------------------------------
-        reaper.GetSetProjectInfo(proj, "RENDER_SETTINGS", 1, true)   -- 1 = Master + Stems
-        reaper.GetSetProjectInfo(proj, "RENDER_BOUNDSFLAG", 1, true) -- 1 = time selection
-        reaper.GetSetProjectInfo(proj, "RENDER_CHANNELS", 2, true)
-        reaper.GetSetProjectInfo(proj, "RENDER_SRATE", 48000, true)
-        reaper.GetSetProjectInfo_String(proj, "RENDER_FORMAT", "wav", true)
-        reaper.GetSetProjectInfo_String(proj, "RENDER_FILE", export_path .. "/$track", true)
-        reaper.GetSetProjectInfo_String(proj, "RENDER_PATTERN", "$track", true)
-
-        msg("→ Rendern nach: " .. export_path)
-
-        -- Rendern
-        reaper.Main_OnCommand(41824, 0)
-
-        -- Aufräumen
-        reaper.GetSet_LoopTimeRange2(proj, true, false, 0.0, 0.0, false)
-        reaper.Main_OnCommand(40297, 0)
+    if selected == 0 then
+        msg("⚠️ Keine passenden Spuren gefunden in " .. proj_name)
+        return
     end
+    local end_pos = get_end_marker_pos(proj)
+    reaper.GetSet_LoopTimeRange2(proj, true, false, 0.0, end_pos, false)
+    reaper.GetSetProjectInfo(proj, "RENDER_SETTINGS", 1, true)
+    reaper.GetSetProjectInfo(proj, "RENDER_BOUNDSFLAG", 1, true)
+    reaper.GetSetProjectInfo(proj, "RENDER_CHANNELS", 2, true)
+    reaper.GetSetProjectInfo(proj, "RENDER_SRATE", 48000, true)
+    reaper.GetSetProjectInfo_String(proj, "RENDER_FORMAT", "wav", true)
+    reaper.GetSetProjectInfo_String(proj, "RENDER_FILE", export_path .. "/$track", true)
+    reaper.GetSetProjectInfo_String(proj, "RENDER_PATTERN", "$track", true)
+    msg("→ Rendern nach: " .. export_path)
+    reaper.Main_OnCommand(41824, 0)
+    reaper.GetSet_LoopTimeRange2(proj, true, false, 0.0, 0.0, false)
+    reaper.Main_OnCommand(40297, 0)
+end
 
-    ---------------------------------
-    -- HAUPTPROGRAMM
-    ---------------------------------
+---@param track_names string[]
+---@param export_path string
+local function ExportRecordings(track_names, export_path)
     reaper.ClearConsole()
-    msg("Starte Export...")
+    
+    if not track_names or #track_names == 0 then
+        msg("Keine Spuren ausgewählt.")
+        return
+    end
+    
+    if not export_path or export_path == "" then
+        msg("Kein Export-Pfad angegeben.")
+        return
+    end
 
-    local root_folder = EXPORT_BASE_PATH .. "/TT_Liveset_Recording_" .. os_date_string()
+    msg("Starte Export mit " .. #track_names .. " ausgewählten Spuren...")
+    msg("Zielordner: " .. export_path)
+    
+    local root_folder = export_path .. "/TT_Liveset_Recording_" .. os_date_string()
     ensure_directory(root_folder)
-
+    
     local i = 0
     while true do
         local proj = reaper.EnumProjects(i, "")
         if not proj then break end
         reaper.SelectProjectInstance(proj)
-        export_tracks_in_project(proj, root_folder)
+        export_tracks_in_project(proj, root_folder, track_names)
         i = i + 1
     end
-
+    
     msg("✅ Export abgeschlossen!")
-    reaper.ShowMessageBox("Alle Projekte wurden exportiert!\n\nZielordner:\n" .. root_folder,
-                          "Export abgeschlossen", 0)
+    reaper.ShowMessageBox("Alle Projekte wurden exportiert!\n\nZielordner:\n" .. root_folder, "Export abgeschlossen", 0)
 end
 
 return ExportRecordings
+
+end)
+__bundle_register("operations/browse_folder", function(require, _LOADED, __bundle_register, __bundle_modules)
+local function BrowseFolder(initial_path)
+    local os_name = reaper.GetOS()
+    local path = ""
+
+    if os_name:find("Win") then
+        -- Windows: Use PowerShell to open FolderBrowserDialog
+        -- We use a temporary script to avoid complex escaping issues in the command line
+        local cmd = 'powershell -Command "Add-Type -AssemblyName System.Windows.Forms; $f = New-Object System.Windows.Forms.FolderBrowserDialog; $f.SelectedPath = \'' .. (initial_path or "") .. '\'; $f.ShowDialog() | Out-Null; $f.SelectedPath"'
+        local handle = io.popen(cmd)
+        if handle then
+            path = handle:read("*a")
+            handle:close()
+        end
+    else
+        -- macOS: Use AppleScript via osascript
+        -- 'choose folder' is the standard way.
+        -- We wrap it in 'try' to handle cancellation (which throws an error) gracefully.
+        local script = 'try\n' ..
+                       '  set userPath to POSIX path of (choose folder with prompt "Select Export Folder")\n' ..
+                       '  return userPath\n' ..
+                       'on error\n' ..
+                       '  return ""\n' ..
+                       'end try'
+        
+        local handle = io.popen('osascript -e \'' .. script .. '\'')
+        if handle then
+            path = handle:read("*a")
+            handle:close()
+        end
+    end
+
+    -- Trim whitespace/newlines
+    if path then
+        path = path:gsub("^%s*(.-)%s*$", "%1")
+    end
+
+    return path
+end
+
+return BrowseFolder
+
+end)
+__bundle_register("operations/get_track_names", function(require, _LOADED, __bundle_register, __bundle_modules)
+---Returns a list of unique track names from all open projects
+---@return string[] track_names
+local function GetTrackNames()
+    local track_set = {}
+    local i = 0
+    
+    while true do
+        local proj = reaper.EnumProjects(i, "")
+        if not proj then break end
+        
+        local num_tracks = reaper.CountTracks(proj)
+        for j = 0, num_tracks - 1 do
+            local track = reaper.GetTrack(proj, j)
+            local _, name = reaper.GetTrackName(track, "")
+            if name and name ~= "" then
+                track_set[name] = true
+            end
+        end
+        i = i + 1
+    end
+    
+    -- Convert to sorted list
+    local track_list = {}
+    for name, _ in pairs(track_set) do
+        table.insert(track_list, name)
+    end
+    table.sort(track_list)
+    
+    return track_list
+end
+
+return GetTrackNames
 
 end)
 __bundle_register("operations/delete_state", function(require, _LOADED, __bundle_register, __bundle_modules)

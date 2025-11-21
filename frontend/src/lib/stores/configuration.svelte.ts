@@ -3,6 +3,7 @@ import { getApi } from '$lib/api/api';
 export interface Configuration {
 	scriptActionId?: string;
 	folderPath?: string;
+	exportPath?: string;
 	setupComplete: boolean;
 }
 
@@ -10,6 +11,7 @@ class ConfigurationStore {
 	private configuration = $state<Configuration>({
 		scriptActionId: undefined,
 		folderPath: undefined,
+		exportPath: undefined,
 		setupComplete: false
 	});
 
@@ -31,6 +33,10 @@ class ConfigurationStore {
 
 	get folderPath() {
 		return this.configuration.folderPath;
+	}
+
+	get exportPath() {
+		return this.configuration.exportPath;
 	}
 
 	async initialize(fetch?: typeof globalThis.fetch) {
@@ -57,13 +63,15 @@ class ConfigurationStore {
 	private async _doInitialize(fetch?: typeof globalThis.fetch) {
 		try {
 			const api = getApi(fetch);
-			const [scriptActionId, folderPath] = await Promise.all([
+			const [scriptActionId, folderPath, exportPath] = await Promise.all([
 				api.scriptSettings.getScriptActionId(),
-				api.scriptSettings.getProjectRoot()
+				api.scriptSettings.getProjectRoot(),
+				api.scriptSettings.getExportPath()
 			]);
 
 			this.configuration.scriptActionId = scriptActionId;
 			this.configuration.folderPath = folderPath;
+			this.configuration.exportPath = exportPath;
 			this.configuration.setupComplete = !!(folderPath && scriptActionId);
 			this.initialized = true;
 		} catch (error) {
@@ -100,6 +108,17 @@ class ConfigurationStore {
 		}
 	}
 
+	async updateExportPath(path: string, fetch?: typeof globalThis.fetch) {
+		try {
+			const api = getApi(fetch);
+			await api.scriptSettings.setExportPath(path);
+			this.configuration.exportPath = path;
+		} catch (error) {
+			console.error('Error updating export path:', error);
+			throw error;
+		}
+	}
+
 	private updateSetupComplete() {
 		this.configuration.setupComplete = !!(
 			this.configuration.folderPath && this.configuration.scriptActionId
@@ -109,6 +128,7 @@ class ConfigurationStore {
 	reset() {
 		this.configuration.scriptActionId = undefined;
 		this.configuration.folderPath = undefined;
+		this.configuration.exportPath = undefined;
 		this.configuration.setupComplete = false;
 		this.initialized = false;
 		this.initializing = false;

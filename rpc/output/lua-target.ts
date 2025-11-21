@@ -125,6 +125,10 @@ export class LuaTarget extends Target {
 				operationLines.push(`\t\tend`);
 			} else {
 				operationLines.push(...this.getInputChecker(name));
+				// Parse JSON for arrays and objects
+				if (type.isArray() || type.isClassOrInterface()) {
+					operationLines.push(`\t\t${name} = json.decode(${name})`);
+				}
 			}
 			operationLines.push('');
 		}

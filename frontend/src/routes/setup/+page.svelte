@@ -2,6 +2,7 @@
 	import { configuration, notifications } from '$lib';
 	import { getApi } from '$lib/api/api';
 	import Button from '$lib/components/Button/Button.svelte';
+	import ConfigurationInfo from '$lib/components/ConfigurationInfo/ConfigurationInfo.svelte';
 	import Form from '$lib/components/Form/Form.svelte';
 	import InstructionBox from '$lib/components/InstructionBox/InstructionBox.svelte';
 	import type { StepStatus } from '$lib/components/Step/Step.svelte';
@@ -11,7 +12,10 @@
 	import ExportIcon from 'virtual:icons/mdi/export';
 	import ImportIcon from 'virtual:icons/mdi/import';
 	import RefreshIcon from 'virtual:icons/mdi/refresh';
-	import RecordIcon from 'virtual:icons/mdi/record-rec';
+	import RecordIcon from 'virtual:icons/mdi/record-circle-outline'; // Updated icon
+	import FolderIcon from 'virtual:icons/mdi/folder-open';
+	import CheckAllIcon from 'virtual:icons/mdi/checkbox-multiple-marked';
+	import CheckNoneIcon from 'virtual:icons/mdi/checkbox-multiple-blank-outline';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -191,10 +195,86 @@
 		fileInput.click();
 	}
 
-	async function exportRecordings() {
+	// Export state
+	let showExportForm = $state(false);
+	let isLoadingTracks = $state(false);
+	let availableTracks = $state<string[]>([]);
+	let selectedTracks = $state<Set<string>>(new Set());
+	let exportPath = $state<string>('');
+
+	// Load exportPath from configuration when available
+	$effect(() => {
+		if (!exportPath && configuration.exportPath) {
+			exportPath = configuration.exportPath;
+		}
+	});
+
+	async function openExportForm() {
+		showExportForm = true;
+		isLoadingTracks = true;
 		try {
-			await api.script.exportRecordings();
+			availableTracks = await api.script.getTrackNames();
+			selectedTracks = new Set(availableTracks);
+			// Use saved exportPath, or fallback to folderPath
+			if (!exportPath) {
+				exportPath = configuration.exportPath || folderPath || '';
+			}
+		} catch (error) {
+			notifications.error(`Failed to fetch tracks: ${(error as Error).message}`);
+			showExportForm = false;
+		} finally {
+			isLoadingTracks = false;
+		}
+	}
+
+	function toggleTrack(track: string) {
+		const newSelection = new Set(selectedTracks);
+		if (newSelection.has(track)) {
+			newSelection.delete(track);
+		} else {
+			newSelection.add(track);
+		}
+		selectedTracks = newSelection;
+	}
+
+	function selectAllTracks() {
+		selectedTracks = new Set(availableTracks);
+	}
+
+	function deselectAllTracks() {
+		selectedTracks = new Set();
+	}
+
+	async function browseForFolder() {
+		try {
+			const result = await api.script.browseFolder(exportPath || folderPath || '/');
+			if (result && result.trim() !== '') {
+				exportPath = result;
+				// Save to configuration for persistence
+				await configuration.updateExportPath(exportPath);
+			}
+		} catch (error) {
+			notifications.error(`Failed to open folder browser: ${(error as Error).message}`);
+		}
+	}
+
+	async function startExport() {
+		if (selectedTracks.size === 0) {
+			notifications.error('Please select at least one track.');
+			return;
+		}
+		if (!exportPath) {
+			notifications.error('Please enter an export path.');
+			return;
+		}
+
+		try {
+			// Save the export path for future use
+			await configuration.updateExportPath(exportPath);
+			
+			await api.script.exportRecordings(Array.from(selectedTracks), exportPath);
 			notifications.success('Recording export started! Check Reaper for progress.');
+			showExportForm = false;
 		} catch (error) {
 			notifications.error(`Failed to start export: ${(error as Error).message}`);
 		}
@@ -273,12 +353,75 @@
 
 	<div class="import-export">
 		<h3>Recording Export</h3>
-		<div class="import-export-buttons">
-			<Button elementType="button" onclick={exportRecordings} variant="text">
-				<RecordIcon />
-				Export Recordings
-			</Button>
-		</div>
+		
+		{#if showExportForm}
+			<div class="export-form">
+				<div class="form-group">
+					<label for="export-path">Export Path:</label>
+					<div class="path-input-group">
+						<input 
+							type="text" 
+							id="export-path" 
+							bind:value={exportPath} 
+							placeholder="e.g., /path/to/export/folder"
+						/>
+						<Button variant="secondary" onclick={browseForFolder} title="Browse Folder">
+							<FolderIcon />
+						</Button>
+					</div>
+				</div>
+
+				<div class="form-group">
+					<div class="track-list-header">
+						<label>Select Tracks to Export:</label>
+						<div class="track-actions">
+							<Button elementType="button" variant="text" onclick={selectAllTracks} title="Select All">
+								<CheckAllIcon /> Select All
+							</Button>
+							<Button elementType="button" variant="text" onclick={deselectAllTracks} title="Deselect All">
+								<CheckNoneIcon /> None
+							</Button>
+						</div>
+					</div>
+					
+					{#if isLoadingTracks}
+						<div class="loading-tracks">Loading tracks from Reaper...</div>
+					{:else if availableTracks.length === 0}
+						<div class="no-tracks">No tracks found in open projects.</div>
+					{:else}
+						<div class="track-list">
+							{#each availableTracks as track}
+								<label class="track-checkbox">
+									<input 
+										type="checkbox" 
+										checked={selectedTracks.has(track)} 
+										onchange={() => toggleTrack(track)}
+									/>
+									<span class="track-name">{track}</span>
+								</label>
+							{/each}
+						</div>
+					{/if}
+				</div>
+
+				<div class="export-actions">
+					<Button elementType="button" onclick={startExport} disabled={selectedTracks.size === 0 || !exportPath}>
+						<RecordIcon />
+						Start Export
+					</Button>
+					<Button elementType="button" variant="text" onclick={() => showExportForm = false}>
+						Cancel
+					</Button>
+				</div>
+			</div>
+		{:else}
+			<div class="import-export-buttons">
+				<Button elementType="button" onclick={openExportForm} variant="text">
+					<RecordIcon />
+					Configure Export
+				</Button>
+			</div>
+		{/if}
 	</div>
 </div>
 
@@ -351,5 +494,99 @@
 	.validation-message--pending {
 		color: var(--comment);
 		font-style: italic;
+	}
+
+	.export-form {
+		display: flex;
+		flex-direction: column;
+		gap: 1.5rem;
+		background: var(--surface-1);
+		padding: 1.5rem;
+		border-radius: 0.5rem;
+		border: 1px solid var(--border);
+		margin-top: 1rem;
+	}
+
+	.path-input-group {
+		display: flex;
+		gap: 0.5rem;
+	}
+
+	.path-input-group input {
+		flex: 1;
+	}
+
+	.track-list-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 0.5rem;
+	}
+	
+	.track-list-header label {
+		margin-bottom: 0;
+	}
+
+	.track-actions {
+		display: flex;
+		gap: 0.5rem;
+	}
+
+	.track-list {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+		gap: 0.5rem;
+		max-height: 300px;
+		overflow-y: auto;
+		border: 1px solid var(--border);
+		padding: 1rem;
+		border-radius: 0.25rem;
+		background: var(--surface-2);
+	}
+
+	.track-checkbox {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		cursor: pointer;
+		padding: 0.5rem;
+		border-radius: 0.25rem;
+		transition: background-color 0.2s;
+		user-select: none;
+	}
+
+	.track-checkbox:hover {
+		background: var(--surface-3);
+	}
+	
+	.track-checkbox input[type="checkbox"] {
+		width: 1.2em;
+		height: 1.2em;
+		margin: 0;
+		cursor: pointer;
+	}
+	
+	.track-name {
+		flex: 1;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.export-actions {
+		display: flex;
+		gap: 1rem;
+		margin-top: 0.5rem;
+		padding-top: 1rem;
+		border-top: 1px solid var(--border);
+	}
+	
+	.loading-tracks, .no-tracks {
+		padding: 2rem;
+		text-align: center;
+		color: var(--text-muted);
+		background: var(--surface-2);
+		border-radius: 0.25rem;
+		border: 1px solid var(--border);
 	}
 </style>

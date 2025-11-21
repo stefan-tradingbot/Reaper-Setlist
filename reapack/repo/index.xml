@@ -368,5 +368,43 @@
         <link rel="website" href="https://github.com/stefan-tradingbot/Reaper-Setlist">GitHub Repository</link>
       </metadata>
     </reapack>
+    <reapack name="TT Liveset Stem Export" type="script" desc="Export stems from multiple REAPER projects with UI-based track selection">
+      <version name="1.0.0" author="stefan-tradingbot" time="2025-11-20T21:13:00Z">
+        <source type="script" file="stem_export_chatgpt.lua" main="main">https://raw.githubusercontent.com/stefan-tradingbot/Reaper-Setlist/main/reapack/repo/stem-export/files/stem_export_chatgpt.lua</source>
+        <changelog><![CDATA[## [1.0.0] (2025-11-20)
+
+### Features
+* Initial release with UI-based track selection
+* Users can now select which tracks to export via a graphical dialog instead of hardcoded track names
+* Supports multiple open projects with unified track selection
+* Interactive checkbox interface with "Select All" and "Deselect All" buttons
+* Scrollable track list for projects with many tracks
+
+### Usage
+1. Open all REAPER projects you want to export
+2. Run the script
+3. Select tracks to export in the dialog
+4. Click OK to start the export process
+]]></changelog>
+      </version>
+      <metadata>
+        <description><![CDATA[{\\rtf1\\ansi\\deff0{\\fonttbl {\\f0\\fnil\\fcharset0 Calibri;}{\\f1\\fnil\\fcharset2 Symbol;}}
+{\\pard TT Liveset Stem Export\\sb70\\par}
+{\\pard Export stems from multiple REAPER projects with an intuitive UI for track selection.\\sb70\\par}
+{\\pard Features\\sb70\\par}
+{{\\*\\pn\\pnlvlblt\\pnf1\\pnindent0{\\pntxtb\\'B7}}\\fi-360\\li720\\sa200\\sl276\\slmult1\\lang22\\f0\\fs22 
+{\\pntext\\tab} {\\b UI-based track selection} - Graphical dialog with checkboxes\\par
+{\\pntext\\tab} {\\b Multi-project support} - Export from all open projects at once\\par
+{\\pntext\\tab} {\\b Flexible selection} - Choose exactly which tracks to export\\par
+{\\pntext\\tab} {\\b Master + Stems rendering} - Exports both master and individual stems\\par
+{\\pntext\\tab} {\\b Time selection support} - Respects END markers in projects\\par}
+{\\pard Usage\\sb70\\par}
+{\\pard 1. Open all projects you want to export\\sb70\\par}
+{\\pard 2. Run the script from REAPER Actions\\sb70\\par}
+{\\pard 3. Select tracks in the dialog\\sb70\\par}
+{\\pard 4. Click OK to export\\sb70\\par}}]]></description>
+        <link rel="website" href="https://github.com/stefan-tradingbot/Reaper-Setlist">GitHub Repository</link>
+      </metadata>
+    </reapack>
   </category>
 </index>

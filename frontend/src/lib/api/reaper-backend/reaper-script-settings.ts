@@ -31,4 +31,12 @@ export class ReaperScriptSettingsClient {
 	async setScriptActionId(id: string): Promise<void> {
 		await this.setStateValue(StateKeys.ScriptActionId, id);
 	}
+
+	async getExportPath(): Promise<string | undefined> {
+		return await this.getStateValue(StateKeys.ExportPath);
+	}
+
+	async setExportPath(path: string): Promise<void> {
+		await this.setStateValue(StateKeys.ExportPath, path);
+	}
 }

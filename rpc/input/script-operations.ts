@@ -26,5 +26,7 @@ export interface ScriptOperations {
 	getOpenTabs: () => TabsResponse;
 	writeChunkedData: <T>(section: string, key: string, chunks: Chunkable<T>) => void;
 	deleteState: (section: string, key: string) => void;
-	exportRecordings: () => void;
+	getTrackNames: () => { trackNames: string[] };
+	browseFolder: (initialPath: string) => { path: string };
+	exportRecordings: (trackNames: string[], exportPath: string) => void;
 }

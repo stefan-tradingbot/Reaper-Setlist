@@ -21,6 +21,8 @@ local GetProjectLength = require "operations/get_project_length"
 local GetOpenTabs = require "operations/get_open_tabs"
 local WriteChunkedData = require "operations/write_chunked_data"
 local DeleteState = require "operations/delete_state"
+local GetTrackNames = require "operations/get_track_names"
+local BrowseFolder = require "operations/browse_folder"
 local ExportRecordings = require "operations/export_recordings"
 
 ---@class ReaperTab
@@ -163,9 +165,48 @@ local Operations = {
 		reaper.DeleteExtState(Globals.SECTION, "key", true)
 	end),
 
-	["exportRecordings"] = safe_operation(function()
-		ExportRecordings()
+	["getTrackNames"] = safe_operation(function()
+		local trackNames = GetTrackNames()
 
+		if trackNames == nil or trackNames == '' then
+			error("Operation getTrackNames failed to return required output: trackNames")
+		end
+
+		reaper.SetExtState(Globals.SECTION, "trackNames", json.encode(trackNames), false)
+	end),
+
+	["browseFolder"] = safe_operation(function()
+		local initialPath = reaper.GetExtState(Globals.SECTION, "initialPath")
+		if initialPath == nil or initialPath == "" then
+			error("Missing required parameter: initialPath")
+		end
+
+		local path = BrowseFolder(initialPath)
+
+		if path == nil or path == '' then
+			error("Operation browseFolder failed to return required output: path")
+		end
+
+		reaper.SetExtState(Globals.SECTION, "path", path, false)
+		reaper.DeleteExtState(Globals.SECTION, "initialPath", true)
+	end),
+
+	["exportRecordings"] = safe_operation(function()
+		local trackNames = reaper.GetExtState(Globals.SECTION, "trackNames")
+		if trackNames == nil or trackNames == "" then
+			error("Missing required parameter: trackNames")
+		end
+		trackNames = json.decode(trackNames)
+
+		local exportPath = reaper.GetExtState(Globals.SECTION, "exportPath")
+		if exportPath == nil or exportPath == "" then
+			error("Missing required parameter: exportPath")
+		end
+
+		ExportRecordings(trackNames, exportPath)
+
+		reaper.DeleteExtState(Globals.SECTION, "trackNames", true)
+		reaper.DeleteExtState(Globals.SECTION, "exportPath", true)
 	end),
 }
 

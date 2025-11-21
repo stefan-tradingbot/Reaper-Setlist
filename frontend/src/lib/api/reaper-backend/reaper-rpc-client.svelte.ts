@@ -143,8 +143,39 @@ export class ReaperRpcClient {
 		await this.apiClient.executeCommands(commands);  
 	}  
 
-	public async exportRecordings(): Promise<void> { 
+	public async getTrackNames(): Promise<string[]> { 
 		const commands = [ 
+			new SetOperationCommand("getTrackNames"), 
+			new RunScriptCommand(), 
+			new GetStateCommand(SectionKeys.ReaperSetlist, "trackNames"), 
+		] as const; 
+		const [_setOperation, _runScript, trackNamesRaw] = await this.apiClient.executeCommands(commands);  
+		if (trackNamesRaw === undefined) { 
+			throw new Error("Failed to retrieve trackNames. Please check the script configuration."); 
+		} 
+		const trackNames = JSON.parse(trackNamesRaw) as string[];  
+		return trackNames;  
+	}  
+
+	public async browseFolder(initialPath: string): Promise<string> { 
+		const commands = [ 
+			new SetStateCommand(SectionKeys.ReaperSetlist, "initialPath", initialPath), 
+			new SetOperationCommand("browseFolder"), 
+			new RunScriptCommand(), 
+			new GetStateCommand(SectionKeys.ReaperSetlist, "path"), 
+		] as const; 
+		const [_setInitialPath, _setOperation, _runScript, pathRaw] = await this.apiClient.executeCommands(commands);  
+		if (pathRaw === undefined) { 
+			throw new Error("Failed to retrieve path. Please check the script configuration."); 
+		} 
+		const path = pathRaw;  
+		return path;  
+	}  
+
+	public async exportRecordings(trackNames: string[], exportPath: string): Promise<void> { 
+		const commands = [ 
+			new SetStateCommand(SectionKeys.ReaperSetlist, "trackNames", JSON.stringify(trackNames)), 
+			new SetStateCommand(SectionKeys.ReaperSetlist, "exportPath", exportPath), 
 			new SetOperationCommand("exportRecordings"), 
 			new RunScriptCommand(), 
 		] as const; 
