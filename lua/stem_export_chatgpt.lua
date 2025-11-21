@@ -6,6 +6,8 @@
 ---------------------------------
 local EXPORT_BASE_PATH = "/Users/mgeigerhilk/Documents/set_export"
 
+
+
 ---------------------------------
 -- HILFSFUNKTIONEN
 ---------------------------------
@@ -314,11 +316,12 @@ end
 ---------------------------------
 -- EXPORT-FUNKTION
 ---------------------------------
-local function export_tracks_in_project(proj, export_root, track_names)
+local function export_tracks_in_project(proj, export_root, track_names, project_index)
     local _, _ = reaper.EnumProjects(-1, "")
     local proj_name = reaper.GetProjectName(proj, "")
     proj_name = proj_name:gsub("%.rpp", "")
-    local export_path = export_root .. "/" .. proj_name
+    local numbered_name = string.format("%02d_%s", project_index, proj_name)
+    local export_path = export_root .. "/" .. numbered_name
     ensure_directory(export_path)
 
     msg("Exportiere Projekt: " .. proj_name)
@@ -365,6 +368,27 @@ local function export_tracks_in_project(proj, export_root, track_names)
     -- Rendern
     reaper.Main_OnCommand(41824, 0)
 
+    ---------------------------------
+    -- Exportierte Spuren nach Export leeren
+    ---------------------------------
+    reaper.Undo_BeginBlock()
+    for i = 0, num_tracks - 1 do
+        local track = reaper.GetTrack(proj, i)
+        local _, name = reaper.GetTrackName(track, "")
+        for _, clear_name in ipairs(track_names) do
+            if name == clear_name then
+                local item_count = reaper.CountTrackMediaItems(track)
+                for j = item_count - 1, 0, -1 do
+                    local item = reaper.GetTrackMediaItem(track, j)
+                    reaper.DeleteTrackMediaItem(track, item)
+                end
+                msg("🧹 Items gelöscht auf Spur: " .. name)
+                break
+            end
+        end
+    end
+    reaper.Undo_EndBlock("Lösche Audio-Items auf exportierten Spuren", -1)
+
     -- Aufräumen
     reaper.GetSet_LoopTimeRange2(proj, true, false, 0.0, 0.0, false)
     reaper.Main_OnCommand(40297, 0)
@@ -401,7 +425,7 @@ local function on_tracks_selected(selected_tracks)
         local proj = reaper.EnumProjects(i, "")
         if not proj then break end
         reaper.SelectProjectInstance(proj)
-        export_tracks_in_project(proj, root_folder, selected_tracks)
+        export_tracks_in_project(proj, root_folder, selected_tracks, i + 1)
         i = i + 1
     end
     
